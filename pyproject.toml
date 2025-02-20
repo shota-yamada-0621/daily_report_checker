@@ -9,6 +9,7 @@ readme = "README.md"
 python = "^3.12"
 typer = "^0.13.1"
 openpyxl = "^3.1.5"
+pywin32 = "^308"
 
 
 [build-system]

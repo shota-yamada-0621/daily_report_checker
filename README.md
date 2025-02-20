@@ -10,6 +10,14 @@ py -3.12 -m poetry config virtualenvs.in-project true
 py -3.12 -m poetry install
 ```
 
+#### 実行コマンド
+
+日報の内容チェック
+```
+py -3.11 -m poetry run python app/main.py 202404 202502
+```
+
+
 #### 機能について
 
 - どの機能も自身の日報フォーマットの Excel 自身を target ディレクトリに格納しておく必要があります。

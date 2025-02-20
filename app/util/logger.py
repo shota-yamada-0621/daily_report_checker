@@ -17,7 +17,7 @@ def setup_root_logger(verbose):
     streamHandler.setFormatter(formatter)
 
     appLogHandler = logging.handlers.RotatingFileHandler(
-        Path(__file__) / "../../../logs/output.log",
+        Path(__file__) / "../../../logs/info.log",
         encoding="utf-8",
         maxBytes=5 * 1024 * 1024,
         backupCount=5,
