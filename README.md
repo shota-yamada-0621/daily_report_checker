@@ -13,9 +13,9 @@ https://blog.pyq.jp/entry/python_install_231102_win
 #### poetry のインストール
 
 ```
-py -3.12 -m pip install poetry
-py -3.12 -m poetry config virtualenvs.in-project true
-py -3.12 -m poetry install
+py -3.11 -m pip install poetry
+py -3.11 -m poetry config virtualenvs.in-project true
+py -3.11 -m poetry install
 ```
 
 #### 実行コマンド
@@ -23,8 +23,22 @@ py -3.12 -m poetry install
 日報の内容チェック
 
 ```
-py -3.12 -m poetry run python app/main.py check 202404 202502
+py -3.11 -m poetry run python app/main.py check 202404 202502
 ```
+
+対象期間の切り出し
+
+```
+py -3.11 -m poetry run python app/main.py cut 202404 202502
+```
+
+対象期間の切り出し
+
+```
+py -3.11 -m poetry run python app/main.py move_a1
+```
+
+
 **(チェックできる内容)**
 
 ```

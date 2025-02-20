@@ -129,7 +129,7 @@ def check_daily_report(ws, sheet_name):
         return False
     # C39, C45 の値が "休暇" であることをチェック
     for cell in ["C39", "C45"]:
-        if ws[cell].value != "休暇":
+        if ws[cell].value in ["休暇", "休日"]:
             logger.warning(f"シート {sheet_name} の {cell} の値が '休暇' ではありません (実際: {ws[cell].value})")
             return False
     return True
@@ -225,10 +225,10 @@ def check_holiday_entries(ws, sheet_name):
         is_holiday_or_weekend = (h_date in jp_holidays) or (h_date.weekday() >= 5)
 
         if is_holiday_or_weekend:
-            if c_value not in ["祝日", "休暇"]:
+            if c_value not in ["祝日", "休暇", "休日"]:
                 incorrect_entries.append(f"{c_cell}: {c_value} (祝日・週末なのに '祝日' または '休暇' ではありません)")
         else:
-            if c_value in ["祝日", "休暇"]:
+            if c_value in ["祝日", "休暇", "休日"]:
                 incorrect_entries.append(f"{c_cell}: {c_value} (平日なのに '祝日' または '休暇' が入力されています)")
 
     if incorrect_entries:
