@@ -4,8 +4,10 @@ from util.logger import setup_root_logger
 import openpyxl
 import re
 import os
+import glob
 import win32com.client
 from datetime import datetime, timedelta
+import holidays  # 日本の祝日データを取得するライブラリ (install: `pip install holidays`)
 
 logger = getLogger()
 app = typer.Typer()
@@ -47,7 +49,7 @@ def check_sheet_dates(ws, sheet_name):
     start_date = datetime.strptime(match.group(1), "%Y%m%d")
 
     # H10 の日付チェック
-    h10_value = ws["H10"].value or ws["H10"].internal_value
+    h10_value = ws["H10"].value
     if isinstance(h10_value, datetime):
         h10_date = h10_value
     else:
@@ -63,7 +65,7 @@ def check_sheet_dates(ws, sheet_name):
 
     incorrect_cells = []
 
-    # H11～H16 の数式チェック
+   # H11～H16 の数式チェック
     for i in range(1, 7):
         cell_ref = f"H{10 + i}"
         cell_value = ws[cell_ref].value
@@ -118,21 +120,136 @@ def check_sheet_dates(ws, sheet_name):
 
 
 
-
 def check_daily_report(ws, sheet_name):
-    """C9, C15, C21, C27, C33 に入力があるかチェック"""
-    required_cells = ["C9", "C15", "C21", "C27", "C33"]
+    """ C列(業務内容)に未入力があるかチェック"""
+    required_cells = ["C9", "C15", "C21", "C27", "C33", "C39", "C45"]
     empty_cells = [cell for cell in required_cells if not ws[cell].value]
-
     if empty_cells:
         logger.warning(f"シート {sheet_name} の日報が入力されていません: {', '.join(empty_cells)}")
+        return False
+    # C39, C45 の値が "休暇" であることをチェック
+    for cell in ["C39", "C45"]:
+        if ws[cell].value != "休暇":
+            logger.warning(f"シート {sheet_name} の {cell} の値が '休暇' ではありません (実際: {ws[cell].value})")
+            return False
+    return True
+
+import holidays
+
+import holidays
+
+import holidays
+import logging
+from datetime import datetime
+
+logger = logging.getLogger(__name__)
+import logging
+
+logger = logging.getLogger(__name__)
+
+import logging
+
+logger = logging.getLogger(__name__)
+
+def check_specific_entries(ws, sheet_name):
+    """
+    - A57 に `=H14` という数式が入力されているかチェック
+    - F4 に `miracleave株式会社` という文字列が入力されているかチェック
+    - C6 が未入力でないかチェック（数値・文字列含む）
+    """
+    errors = []
+
+    # A57セルのチェック
+    a57_formula = ws["A57"].value
+    if a57_formula != "=H14":
+        errors.append(f"A57: {a57_formula} ('=H14' ではありません)")
+
+    # F4セルのチェック
+    f4_value = ws["F4"].value
+    if f4_value != "miracleave株式会社":
+        errors.append(f"F4: {f4_value} ('miracleave株式会社' ではありません)")
+
+    # C6セルのチェック（数値や文字列を含め、未入力とする）
+    c6_value = ws["C6"].value
+    if c6_value is None or (isinstance(c6_value, str) and c6_value.strip() == ""):
+        errors.append("C6: 未入力です")
+
+    # エラーがあればログに出力
+    if errors:
+        logger.warning(f"シート {sheet_name} のチェックに失敗しました:\n" + "\n".join(errors))
         return False
 
     return True
 
+
+
+def check_holiday_entries(ws, sheet_name):
+    """H10〜H16の日付が祝日または土日の場合、C列に「祝日」または「休暇」が入力されているかチェック。
+       平日の場合、「祝日」または「休暇」が入力されていないかチェック。"""
+    jp_holidays = holidays.JP()  # 日本の祝日情報を取得
+
+    # H列とC列の対応表
+    check_map = {
+        "H10": "C9",
+        "H11": "C15",
+        "H12": "C21",
+        "H13": "C27",
+        "H14": "C33",
+        "H15": "C39",
+        "H16": "C45",
+    }
+
+    incorrect_entries = []
+
+    # H10 の日付を取得
+    h10_value = ws["H10"].value
+    if isinstance(h10_value, datetime):
+        h10_date = h10_value  # すでに datetime 型ならそのまま
+    else:
+        try:
+            h10_date = datetime.strptime(str(h10_value), "%Y-%m-%d %H:%M:%S")  # Excel のフォーマットに合わせる
+        except ValueError:
+            logger.warning(f"シート {sheet_name} の H10 の値が不正: {h10_value}")
+            return False  # H10 が不正なら処理を中断
+
+    for h_cell, c_cell in check_map.items():
+        if h_cell == "H10":
+            h_date = h10_date  # H10 はそのまま使用
+        else:
+            day_offset = int(h_cell[1:]) - 10  # H11 → +1, H12 → +2, …
+            h_date = h10_date + timedelta(days=day_offset)
+
+        c_value = ws[c_cell].value
+
+        # 祝日 or 土日チェック
+        is_holiday_or_weekend = (h_date in jp_holidays) or (h_date.weekday() >= 5)
+
+        if is_holiday_or_weekend:
+            if c_value not in ["祝日", "休暇"]:
+                incorrect_entries.append(f"{c_cell}: {c_value} (祝日・週末なのに '祝日' または '休暇' ではありません)")
+        else:
+            if c_value in ["祝日", "休暇"]:
+                incorrect_entries.append(f"{c_cell}: {c_value} (平日なのに '祝日' または '休暇' が入力されています)")
+
+    if incorrect_entries:
+        logger.warning(f"シート {sheet_name} の日付エントリが不正です:\n" + "\n".join(incorrect_entries))
+        return False
+
+    return True
+
+
+
+
+
+
 @app.command("check")
 def sheet_name_check(start_yyyymm: str, end_yyyymm: str):
-    wb = openpyxl.load_workbook("input\日報_山田翔太 (7).xlsx", data_only=False)  # 数式を取得するため data_only=False
+    input_dir = os.path.abspath("input")
+    excel_files = glob.glob(os.path.join(input_dir, "*.xlsx"))
+    if not excel_files:
+        raise FileNotFoundError("input フォルダに Excel ファイルが見つかりません。")
+    input_path = excel_files[0]
+    wb = openpyxl.load_workbook(f"{input_path}", data_only=False)
     existing_sheets = {ws.title for ws in wb.worksheets}
 
     expected_sheets = generate_expected_sheet_names(start_yyyymm, end_yyyymm)
@@ -153,16 +270,21 @@ def sheet_name_check(start_yyyymm: str, end_yyyymm: str):
             ws = wb[sheet_name]
             check_sheet_dates(ws, sheet_name)
             check_daily_report(ws, sheet_name)
-
-typer_app = typer.Typer()
-logger = getLogger()
+            check_holiday_entries(ws, sheet_name)
+            check_specific_entries(ws, sheet_name)
 
 @app.command("cut")
 def cut_out_sheet(start_yyyymm: str, end_yyyymm: str):
     """
     指定した年月範囲に含まれるシートのみを抽出し、新しいExcelファイルとして出力する。
     """
-    input_path = os.path.abspath("target\\日報_山田翔太 (7).xlsx")
+    input_dir = os.path.abspath("input")
+    # inputフォルダ内の最初に見つかった.xlsxファイルを取得
+    excel_files = glob.glob(os.path.join(input_dir, "*.xlsx"))
+    if not excel_files:
+     raise FileNotFoundError("input フォルダに Excel ファイルが見つかりません。")
+
+    input_path = excel_files[0]  # 最初のExcelファイルを取得
     output_dir = os.path.abspath("output")
     output_filename = os.path.join(output_dir, f"日報_抽出_{start_yyyymm}_{end_yyyymm}.xlsx")
     
@@ -210,6 +332,58 @@ def cut_out_sheet(start_yyyymm: str, end_yyyymm: str):
     
     finally:
         excel.Quit()  # Excelを終了
+
+import os
+import glob
+import win32com.client
+import typer
+from logging import getLogger
+
+@app.command("move_a1")
+def move_active_cell_to_a1():
+    """
+    全てのシートのアクティブセルを A1 に移動し、最初のシートをアクティブにして上書き保存する
+    """
+    input_dir = os.path.abspath("input")
+    excel_files = glob.glob(os.path.join(input_dir, "*.xlsx"))
+
+    if not excel_files:
+        raise FileNotFoundError("input フォルダに Excel ファイルが見つかりません。")
+
+    input_path = excel_files[0]  # 最初に見つかったExcelファイルを処理
+    logger.info(f"処理対象のExcelファイル: {input_path}")
+
+    try:
+        # Excelアプリケーションを起動
+        excel = win32com.client.Dispatch("Excel.Application")
+        excel.Visible = False  # Excelを非表示で実行
+
+        # 指定のExcelファイルを開く
+        wb = excel.Workbooks.Open(input_path)
+
+        # すべてのシートのアクティブセルをA1に設定
+        for sheet in wb.Sheets:
+            sheet.Activate()
+            sheet.Range("A1").Select()
+
+        # **最初のシートをアクティブにする**
+        first_sheet = wb.Sheets(1)  # 1番目のシートを取得
+        first_sheet.Activate()  # アクティブに設定
+
+        # 上書き保存
+        wb.Save()
+        logger.info(f"すべてのシートのアクティブセルをA1に移動し、最初のシートをアクティブにして保存しました: {input_path}")
+
+        # ファイルを閉じる
+        wb.Close(SaveChanges=True)
+
+    except Exception as e:
+        logger.error(f"エラーが発生しました: {e}")
+
+    finally:
+        excel.Quit()  # Excelアプリケーションを終了
+
+
 
 if __name__ == "__main__":
     setup_root_logger(verbose=True)
