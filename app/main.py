@@ -129,27 +129,17 @@ def check_daily_report(ws, sheet_name):
         return False
     # C39, C45 の値が "休暇" であることをチェック
     for cell in ["C39", "C45"]:
-        if ws[cell].value in ["休暇", "休日"]:
-            logger.warning(f"シート {sheet_name} の {cell} の値が '休暇' ではありません (実際: {ws[cell].value})")
+        cell_value = str(ws[cell].value).strip()
+        if cell_value in ["休暇"]:
+            logger.warning(f"シート {sheet_name} の {cell} の値が '休暇' ではありません (実際: {repr(cell_value)})")
             return False
     return True
 
-import holidays
-
-import holidays
 
 import holidays
 import logging
 from datetime import datetime
 
-logger = logging.getLogger(__name__)
-import logging
-
-logger = logging.getLogger(__name__)
-
-import logging
-
-logger = logging.getLogger(__name__)
 
 def check_specific_entries(ws, sheet_name):
     """
@@ -282,12 +272,12 @@ def cut_out_sheet(start_yyyymm: str, end_yyyymm: str):
     # inputフォルダ内の最初に見つかった.xlsxファイルを取得
     excel_files = glob.glob(os.path.join(input_dir, "*.xlsx"))
     if not excel_files:
-     raise FileNotFoundError("input フォルダに Excel ファイルが見つかりません。")
+        raise FileNotFoundError("input フォルダに Excel ファイルが見つかりません。")
 
     input_path = excel_files[0]  # 最初のExcelファイルを取得
     output_dir = os.path.abspath("output")
     output_filename = os.path.join(output_dir, f"日報_抽出_{start_yyyymm}_{end_yyyymm}.xlsx")
-    
+
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
@@ -302,19 +292,20 @@ def cut_out_sheet(start_yyyymm: str, end_yyyymm: str):
         # 新規Excelファイルを作成
         new_wb = excel.Workbooks.Add()
 
-        # 期待されるシート名を取得（順番通り）
+        # 期待されるシート名を取得（昇順でソート）
         expected_sheets = generate_expected_sheet_names(start_yyyymm, end_yyyymm)
 
         # シートを順番通りにコピー
         copied_any = False
+
         for sheet_name in expected_sheets:
             if sheet_name in [sheet.Name for sheet in wb.Sheets]:
-                wb.Sheets(sheet_name).Copy(Before=new_wb.Sheets(1))
+                wb.Sheets(sheet_name).Copy(Before=new_wb.Sheets(1))  # 先頭に追加
                 copied_any = True
 
         if copied_any:
-            # 最初に自動作成された空のシートがある場合は削除
-            if new_wb.Sheets.Count > 1:
+            # デフォルトの空シート（Sheet1 など）を削除
+            while new_wb.Sheets.Count > len(expected_sheets):
                 new_wb.Sheets(new_wb.Sheets.Count).Delete()
 
             # 新規Excelファイルを保存
@@ -332,6 +323,8 @@ def cut_out_sheet(start_yyyymm: str, end_yyyymm: str):
     
     finally:
         excel.Quit()  # Excelを終了
+
+
 
 import os
 import glob
@@ -383,6 +376,50 @@ def move_active_cell_to_a1():
     finally:
         excel.Quit()  # Excelアプリケーションを終了
 
+@app.command("set_zoom")
+def set_zoom_to_100(zoom: int = 100):
+    """
+    inputフォルダ内のすべてのExcelファイルのシートの拡大・縮小を指定した倍率に設定する。
+    
+    Args:
+        zoom (int): 設定するズーム倍率（デフォルトは 100%）
+    """
+    input_dir = os.path.abspath("input")
+    excel_files = glob.glob(os.path.join(input_dir, "*.xlsx"))
+    
+    if not excel_files:
+        raise FileNotFoundError("input フォルダに Excel ファイルが見つかりません。")
+
+    try:
+        # Excelアプリケーションの起動
+        excel = win32com.client.Dispatch("Excel.Application")
+        excel.Visible = False  # 非表示で実行
+
+        for file_path in excel_files:
+            try:
+                logger.info(f"処理中: {file_path}")
+                wb = excel.Workbooks.Open(file_path)
+
+                # 各シートをアクティブ化し、その後ズームを設定
+                for sheet in wb.Sheets:
+                    sheet.Activate()  # シートをアクティブ化
+                    excel.ActiveWindow.Zoom = zoom  # ズームを設定
+
+                # 上書き保存
+                wb.Save()
+                wb.Close(SaveChanges=True)
+                logger.info(f"{file_path} のすべてのシートの拡大・縮小を {zoom}% に設定しました。")
+
+            except Exception as e:
+                logger.error(f"エラー発生 ({file_path}): {e}")
+
+        logger.info("全てのExcelシートのズーム設定が完了しました。")
+
+    except Exception as e:
+        logger.error(f"Excel 操作中にエラーが発生しました: {e}")
+
+    finally:
+        excel.Quit()  # Excelを終了
 
 
 if __name__ == "__main__":
